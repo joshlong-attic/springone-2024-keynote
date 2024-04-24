@@ -2,6 +2,8 @@ package bootiful.ragpipeline;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.job.builder.JobBuilder;
@@ -12,10 +14,12 @@ import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
 import org.springframework.batch.item.support.ListItemReader;
+import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.batch.JobExecutionEvent;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.io.Resource;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -26,14 +30,16 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 
 @Configuration
+@Profile("productsJsonLoader")
 class ProductsJsonLoaderJobConfiguration {
+
+    private final Logger log = LoggerFactory.getLogger(getClass());
 
     private final JdbcClient db;
 
     ProductsJsonLoaderJobConfiguration(DataSource db) {
         this.db = JdbcClient.create(db);
     }
-
 
     private static Product from(JsonNode jsonNode) {
         var sku = jsonNode.get("SKU").textValue();
@@ -44,6 +50,21 @@ class ProductsJsonLoaderJobConfiguration {
         return new Product(id, description, name, sku, price);
     }
 
+    @Bean
+    ItemWriter<Product> productItemWriter(DataSource dataSource) {
+        return new JdbcBatchItemWriterBuilder<Product>()
+                .dataSource(dataSource)
+                .sql("insert into products(description, name, sku, price) values ( ?, ?, ?, ?)")
+                .itemPreparedStatementSetter((item, ps) -> {
+                    var col = 0;
+                    ps.setString(++col, item.description());
+                    ps.setString(++col, item.name());
+                    ps.setString(++col, item.sku());
+                    ps.setDouble(++col, item.price());
+                })
+                .assertUpdates(true)
+                .build();
+    }
 
     @Bean
     ItemReader<Product> productItemReader(ObjectMapper objectMapper, @Value("classpath:/products.json") Resource resource) throws Exception {
@@ -52,24 +73,8 @@ class ProductsJsonLoaderJobConfiguration {
             var jsonNode = objectMapper.readValue(reader, JsonNode.class);
             jsonNode.elements().forEachRemaining(jn -> products.add(from(jn)));
         }
+        log.debug("there are {} products in the source .json", products.size());
         return new ListItemReader<>(products);
-    }
-
-    @Bean
-    ItemWriter<Product> productItemWriter(DataSource dataSource) {
-        return new JdbcBatchItemWriterBuilder<Product>()
-                .dataSource(dataSource)
-                .sql("insert into products(  description, name, sku , price) values ( ? , ?, ?, ?)")
-                .itemPreparedStatementSetter((item, ps) -> {
-                    var col = 0;
-                    ps.setString(++col, item.description());
-                    ps.setString(++col, item.name());
-                    ps.setString(++col, item.sku());
-                    ps.setDouble(++col, item.price());
-                    ps.execute();
-                })
-                .assertUpdates(true)
-                .build();
     }
 
     @Bean
@@ -84,9 +89,21 @@ class ProductsJsonLoaderJobConfiguration {
     }
 
     @Bean
-    Job csvJob(JobRepository repository, Step fileToDbStep) {
-        return new JobBuilder("csv", repository)
-                .flow(fileToDbStep)
+    Step initializationStep(JobRepository repository, JdbcClient jdbcClient,
+                            PlatformTransactionManager transactionManager) {
+        return new StepBuilder("initialize", repository)
+                .tasklet((contribution, chunkContext) -> {
+                    jdbcClient.sql("delete from products").update();
+                    return RepeatStatus.FINISHED;
+                }, transactionManager)
+                .build();
+    }
+
+    @Bean
+    Job csvJob(JobRepository repository, Step initializationStep, Step fileToDbStep) {
+        return new JobBuilder("json", repository)
+                .flow(initializationStep)
+                .next(fileToDbStep)
                 .end()
                 .incrementer(new RunIdIncrementer())
                 .build();
@@ -94,7 +111,7 @@ class ProductsJsonLoaderJobConfiguration {
 
     @EventListener(JobExecutionEvent.class)
     void jobExecutedEvent() {
-        this.db
+        var count = this.db
                 .sql("select * from products")
                 .query((rs, rowNum) -> new Product(rs.getInt("id"),
                         rs.getString("description"),
@@ -102,8 +119,8 @@ class ProductsJsonLoaderJobConfiguration {
                         rs.getString("description"),
                         rs.getFloat("price")))
                 .stream()
-                .forEach(System.out::println);
+                .count();
+        log.info("wrote [{}] products to the DB", count);
 
     }
-
 }

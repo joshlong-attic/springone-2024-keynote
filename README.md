@@ -1,2 +1,3 @@
-# springone-2024-top-secret-demo
-hi Spring fans! let's build something awesome
+# SpringOne 2024 Top Secret Demo
+
+Hi, Spring fans! Let's build something awesome for SpringOne 2024.
