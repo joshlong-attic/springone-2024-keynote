@@ -15,6 +15,9 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.annotation.Order;
 import org.springframework.data.annotation.Id;
@@ -30,6 +33,7 @@ import java.util.UUID;
 
 import static bootiful.ragpipeline.ProductsJsonLoaderJobConfiguration.JOB_NAME;
 
+@EnableConfigurationProperties(RagPipelineConfigurationProperties.class)
 @SpringBootApplication
 public class RagPipelineApplication {
 
@@ -50,8 +54,8 @@ public class RagPipelineApplication {
     }
 
     @Bean
-    @Order(100)
-    ApplicationRunner productsBatchJobRunner(JobLauncher jobLauncher, @Qualifier(JOB_NAME) Job job) {
+    @ConditionalOnProperty ("bootiful.rag.ingest-products")
+    ApplicationRunner productsIngestBatchJobRunner(JobLauncher jobLauncher, @Qualifier(JOB_NAME) Job job) {
         return args -> {
             log.info("running the batch job");
             jobLauncher.run(job, new JobParametersBuilder()
@@ -61,7 +65,7 @@ public class RagPipelineApplication {
     }
 
     @Bean
-    @Order(150)
+    @ConditionalOnProperty ("bootiful.rag.create-vector-database-embeddings")
     ApplicationRunner vectorDbInitializationRunner(ProductService productService, JdbcClient jdbcClient, VectorStore vectorStore,
                                                    TokenTextSplitter tokenTextSplitter) {
         return args -> {
@@ -91,7 +95,7 @@ public class RagPipelineApplication {
 
 
     @Bean
-    @Order(200)
+    @ConditionalOnProperty ("bootiful.rag.run-rag-demo")
     ApplicationRunner ragDemoRunner(ProductService productService) {
         return args -> {
 
@@ -100,7 +104,7 @@ public class RagPipelineApplication {
             var product = productService.byId(40);
             log.info("searching for similar records to\n{}", product.id() + " " + product.name() + " " + product.description());
 
-            log.info("results ");
+            log.info("results:");
             var similar = productService.similarProductsTo(product);
             log.info("found {}", similar.size());
             for (var p : similar)
@@ -164,4 +168,9 @@ class ProductService {
 }
 
 record Product(@Id Integer id, String description, String name, String sku, float price) {
+}
+
+@ConfigurationProperties(prefix = "bootiful.rag")
+record RagPipelineConfigurationProperties(
+        boolean ingestProducts, boolean createVectorDatabaseEmbeddings, boolean runRagDemo) {
 }
