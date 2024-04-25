@@ -2,15 +2,21 @@ package bootiful.ragpipeline;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.batch.core.Job;
+import org.springframework.batch.core.JobParametersBuilder;
+import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.annotation.Order;
 import org.springframework.data.annotation.Id;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -21,8 +27,12 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
+import static bootiful.ragpipeline.ProductsJsonLoaderJobConfiguration.JOB_NAME;
+
 @SpringBootApplication
 public class RagPipelineApplication {
+
+    private final Logger log = LoggerFactory.getLogger(getClass());
 
     public static void main(String[] args) {
         SpringApplication.run(RagPipelineApplication.class, args);
@@ -38,17 +48,54 @@ public class RagPipelineApplication {
         return new TokenTextSplitter();
     }
 
+    @Bean
+    @Order(100)
+    ApplicationRunner productsBatchJobRunner(JobLauncher jobLauncher, @Qualifier(JOB_NAME) Job job) {
+        return args -> {
+            log.info("running the batch job");
+            jobLauncher.run(job, new JobParametersBuilder().toJobParameters());
+        };
+    }
 
     @Bean
-    ApplicationRunner ragDemo(ProductService productService, JdbcClient jdbcClient, VectorStore vectorStore,
-                              TokenTextSplitter tokenTextSplitter) {
+    @Order(150)
+    ApplicationRunner vectorDbInitializationRunner(ProductService productService, JdbcClient jdbcClient, VectorStore vectorStore,
+                                                   TokenTextSplitter tokenTextSplitter) {
+        return args -> {
+            log.info("initializing the vector DB");
+            var log1 = LoggerFactory.getLogger(getClass());
+            jdbcClient.sql("delete from vector_store");
+            var products = productService.products();
+            products
+                    .parallelStream()
+                    .forEach(product -> {
+                        var doc = new Document(
+                                product.name() + " " + product.description(),
+                                Map.of("price", product.price(),
+                                        "description", product.description(),
+                                        "sku", product.sku(),
+                                        "name", product.name(),
+                                        "id", product.id()
+                                ));
+                        log1.info("adding [" + product.id() + "] to the vector db.");
+
+                        var vectorStoreReadyDocs = tokenTextSplitter.apply(List.of(doc));
+
+                        vectorStore.accept(vectorStoreReadyDocs);
+                    });
+        };
+    }
+
+
+
+    @Bean
+    @Order(200)
+    ApplicationRunner ragDemoRunner(ProductService productService) {
         return args -> {
 
+            log.info("running the RAG demo");
 
-            var log = LoggerFactory.getLogger(getClass());
-//initializeVectorDatabase(productService, jdbcClient, vectorStore, tokenTextSplitter);
-
-            var product = productService.byId(7011);
+            var product = productService.byId(3001);
             log.info("searching for similar records to\n{}", product.id() + " " + product.name() + " " + product.description());
 
             log.info("results ");
@@ -59,31 +106,6 @@ public class RagPipelineApplication {
                         p.name() + System.lineSeparator() + p.id() + System.lineSeparator() + p.description());
 
         };
-    }
-
-    private void initializeVectorDatabase(ProductService productService,
-                                          JdbcClient jdbcClient, VectorStore vectorStore,
-                                          TokenTextSplitter tokenTextSplitter) {
-        var log = LoggerFactory.getLogger(getClass());
-        jdbcClient.sql("delete from vector_store");
-        var products = productService.products();
-        products
-                .parallelStream()
-                .forEach(product -> {
-                    var doc = new Document(
-                            product.name() + " " + product.description(),
-                            Map.of("price", product.price(),
-                                    "description", product.description(),
-                                    "sku", product.sku(),
-                                    "name", product.name(),
-                                    "id", product.id()
-                            ));
-                    log.info("adding [" + product.id() + "] to the vector db.");
-
-                    var vectorStoreReadyDocs = tokenTextSplitter.apply(List.of(doc));
-
-                    vectorStore.accept(vectorStoreReadyDocs);
-                });
     }
 
 }
@@ -113,16 +135,23 @@ class ProductService {
                 .peek(doc -> log.debug((Float) doc.getMetadata().get("distance")))
                 .map(doc -> (Integer) doc.getMetadata().get("id"))
                 .filter(id -> !id.equals(product.id()))
+                .peek(id -> System.out.println("found " + id))
                 .map(this::byId)
                 .toList();
     }
 
     Product byId(Integer id) {
-        return this.jdbcClient
+        try {
+            return this.jdbcClient
                 .sql("select * from products where id = ? ")
                 .param(id)
                 .query(this.productRowMapper)
-                .single();
+                    .single();
+        } //
+        catch (Throwable throwable) {
+            log.warn("could not find the ID " + id, throwable);
+        }
+        throw new RuntimeException("oops!") ;
     }
 
     Collection<Product> products() {

@@ -19,8 +19,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.batch.JobExecutionEvent;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.io.Resource;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -29,9 +29,12 @@ import javax.sql.DataSource;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 
+@Order(100)
 @Configuration
-@Profile("productsJsonLoader")
+//@Profile("productsJsonLoader")
 class ProductsJsonLoaderJobConfiguration {
+
+    static final String JOB_NAME = "csvJob";
 
     private final Logger log = LoggerFactory.getLogger(getClass());
 
@@ -99,7 +102,7 @@ class ProductsJsonLoaderJobConfiguration {
                 .build();
     }
 
-    @Bean
+    @Bean(JOB_NAME)
     Job csvJob(JobRepository repository, Step initializationStep, Step fileToDbStep) {
         return new JobBuilder("json", repository)
                 .flow(initializationStep)
