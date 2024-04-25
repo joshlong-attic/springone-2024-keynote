@@ -26,6 +26,7 @@ import javax.sql.DataSource;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static bootiful.ragpipeline.ProductsJsonLoaderJobConfiguration.JOB_NAME;
 
@@ -53,7 +54,9 @@ public class RagPipelineApplication {
     ApplicationRunner productsBatchJobRunner(JobLauncher jobLauncher, @Qualifier(JOB_NAME) Job job) {
         return args -> {
             log.info("running the batch job");
-            jobLauncher.run(job, new JobParametersBuilder().toJobParameters());
+            jobLauncher.run(job, new JobParametersBuilder()
+                    .addJobParameter("id", UUID.randomUUID().toString(), String.class)
+                    .toJobParameters());
         };
     }
 
@@ -63,7 +66,6 @@ public class RagPipelineApplication {
                                                    TokenTextSplitter tokenTextSplitter) {
         return args -> {
             log.info("initializing the vector DB");
-            var log1 = LoggerFactory.getLogger(getClass());
             jdbcClient.sql("delete from vector_store");
             var products = productService.products();
             products
@@ -77,7 +79,7 @@ public class RagPipelineApplication {
                                         "name", product.name(),
                                         "id", product.id()
                                 ));
-                        log1.info("adding [" + product.id() + "] to the vector db.");
+                        log.info("adding [" + product.id() + "] to the vector db.");
 
                         var vectorStoreReadyDocs = tokenTextSplitter.apply(List.of(doc));
 
@@ -95,7 +97,7 @@ public class RagPipelineApplication {
 
             log.info("running the RAG demo");
 
-            var product = productService.byId(3001);
+            var product = productService.byId(40);
             log.info("searching for similar records to\n{}", product.id() + " " + product.name() + " " + product.description());
 
             log.info("results ");
@@ -132,10 +134,9 @@ class ProductService {
         var similar = this.vectorStore.similaritySearch(SearchRequest.query(product.name() + " " + product.description()));
         return similar
                 .parallelStream()
-                .peek(doc -> log.debug((Float) doc.getMetadata().get("distance")))
+                .peek(doc -> log.debug( "distance " +(Float) doc.getMetadata().get("distance") +" for ID " + doc.getMetadata().get("id")))
                 .map(doc -> (Integer) doc.getMetadata().get("id"))
                 .filter(id -> !id.equals(product.id()))
-                .peek(id -> System.out.println("found " + id))
                 .map(this::byId)
                 .toList();
     }

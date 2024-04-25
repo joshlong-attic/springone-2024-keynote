@@ -29,9 +29,7 @@ import javax.sql.DataSource;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 
-@Order(100)
 @Configuration
-//@Profile("productsJsonLoader")
 class ProductsJsonLoaderJobConfiguration {
 
     static final String JOB_NAME = "csvJob";

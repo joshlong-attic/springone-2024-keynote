@@ -5,5 +5,4 @@ create table if not exists products
     price       float  not null default 0,
     sku         text   not null,
     description text   not null
-
 );
