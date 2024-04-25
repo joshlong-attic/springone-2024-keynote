@@ -4,6 +4,8 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.ChatClient;
+import org.springframework.ai.chat.prompt.SystemPromptTemplate;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.SearchRequest;
@@ -37,6 +39,7 @@ import static bootiful.ragpipeline.ProductsJsonLoaderJobConfiguration.JOB_NAME;
 @SpringBootApplication
 public class RagPipelineApplication {
 
+
     private final Logger log = LoggerFactory.getLogger(getClass());
 
     public static void main(String[] args) {
@@ -54,6 +57,7 @@ public class RagPipelineApplication {
     }
 
     @Bean
+    @Order(10)
     @ConditionalOnProperty ("bootiful.rag.ingest-products")
     ApplicationRunner productsIngestBatchJobRunner(JobLauncher jobLauncher, @Qualifier(JOB_NAME) Job job) {
         return args -> {
@@ -65,6 +69,7 @@ public class RagPipelineApplication {
     }
 
     @Bean
+    @Order(20)
     @ConditionalOnProperty ("bootiful.rag.create-vector-database-embeddings")
     ApplicationRunner vectorDbInitializationRunner(ProductService productService, JdbcClient jdbcClient, VectorStore vectorStore,
                                                    TokenTextSplitter tokenTextSplitter) {
@@ -83,7 +88,7 @@ public class RagPipelineApplication {
                                         "name", product.name(),
                                         "id", product.id()
                                 ));
-                        log.info("adding [" + product.id() + "] to the vector db.");
+                        log.debug("adding [" +  (product) + "] to the vector db.");
 
                         var vectorStoreReadyDocs = tokenTextSplitter.apply(List.of(doc));
 
@@ -93,8 +98,8 @@ public class RagPipelineApplication {
     }
 
 
-
     @Bean
+    @Order(30)
     @ConditionalOnProperty ("bootiful.rag.run-rag-demo")
     ApplicationRunner ragDemoRunner(ProductService productService) {
         return args -> {
@@ -102,14 +107,11 @@ public class RagPipelineApplication {
             log.info("running the RAG demo");
 
             var product = productService.byId(40);
-            log.info("searching for similar records to\n{}", product.id() + " " + product.name() + " " + product.description());
+            log.info("searching for similar records to\n{}",  (product));
 
-            log.info("results:");
-            var similar = productService.similarProductsTo(product);
-            log.info("found {}", similar.size());
-            for (var p : similar)
-                System.out.println(System.lineSeparator() + System.lineSeparator() +
-                        p.name() + System.lineSeparator() + p.id() + System.lineSeparator() + p.description());
+            log.info("similar results:");
+            for (var p : productService.similarProductsTo( product))
+                System.out.println(p.toString());
 
         };
     }
@@ -125,16 +127,32 @@ class ProductService {
 
     private final VectorStore vectorStore;
 
+    private final ChatClient singularity;
+
     private final RowMapper<Product> productRowMapper = (rs, rowNum) -> new Product(
             rs.getInt("id"), rs.getString("description"),
             rs.getString("name"), rs.getString("sku"), rs.getFloat("price"));
 
-    ProductService(JdbcClient jdbcClient, VectorStore vectorStore) {
+    ProductService(JdbcClient jdbcClient, VectorStore vectorStore, ChatClient singularity) {
         this.jdbcClient = jdbcClient;
         this.vectorStore = vectorStore;
+        this.singularity = singularity;
     }
 
-    Collection<Product> similarProductsTo(Product product) {
+/*    Collection<Product> recommend(Product product, String query) {
+
+        var systemPrompt = """
+                
+                You are a shopping assistant whose job it is to help shoppers answer their questions and help them find the best alternative product.
+                
+
+                
+                """;
+        var systemPromptTemplate = new SystemPromptTemplate()
+
+    }*/
+
+      Collection<Product> similarProductsTo(Product product) {
         var similar = this.vectorStore.similaritySearch(SearchRequest.query(product.name() + " " + product.description()));
         return similar
                 .parallelStream()
@@ -168,6 +186,10 @@ class ProductService {
 }
 
 record Product(@Id Integer id, String description, String name, String sku, float price) {
+    @Override
+    public String toString() {
+        return  id + " " + name;
+    }
 }
 
 @ConfigurationProperties(prefix = "bootiful.rag")
