@@ -1,8 +1,11 @@
 package bootiful.ragpipeline;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
+import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.SpringApplication;
@@ -40,8 +43,10 @@ public class RagPipelineApplication {
     ApplicationRunner ragDemo(ProductService productService, JdbcClient jdbcClient, VectorStore vectorStore,
                               TokenTextSplitter tokenTextSplitter) {
         return args -> {
+
+
             var log = LoggerFactory.getLogger(getClass());
-//            initializeVectorDatabase(productService, jdbcClient, vectorStore, tokenTextSplitter);
+            //initializeVectorDatabase(productService, jdbcClient, vectorStore, tokenTextSplitter);
 
             var product = productService.byId(7011);
             log.info("searching for similar records to\n{}", product.id() + " " + product.name() + " " + product.description());
@@ -51,7 +56,7 @@ public class RagPipelineApplication {
             log.info("found {}", similar.size());
             for (var p : similar)
                 System.out.println(System.lineSeparator() + System.lineSeparator() +
-                        p.name() + System.lineSeparator() + p.id()+ System.lineSeparator() + p.description());
+                        p.name() + System.lineSeparator() + p.id() + System.lineSeparator() + p.description());
 
         };
     }
@@ -72,11 +77,12 @@ public class RagPipelineApplication {
                                     "sku", product.sku(),
                                     "name", product.name(),
                                     "id", product.id()
-                            )
-                    );
+                            ));
                     log.info("adding [" + product.id() + "] to the vector db.");
 
-                    vectorStore.accept(List.of(doc));
+                    var vectorStoreReadyDocs = tokenTextSplitter.apply(List.of(doc));
+
+                    vectorStore.accept(vectorStoreReadyDocs);
                 });
     }
 
@@ -85,17 +91,15 @@ public class RagPipelineApplication {
 @Service
 class ProductService {
 
+    private final Log log = LogFactory.getLog(getClass());
+
     private final JdbcClient jdbcClient;
 
     private final VectorStore vectorStore;
 
     private final RowMapper<Product> productRowMapper = (rs, rowNum) -> new Product(
-            rs.getInt("id"),
-            rs.getString("description"),
-            rs.getString("name"),
-            rs.getString("sku"),
-            rs.getFloat("price")
-    );
+            rs.getInt("id"), rs.getString("description"),
+            rs.getString("name"), rs.getString("sku"), rs.getFloat("price"));
 
     ProductService(JdbcClient jdbcClient, VectorStore vectorStore) {
         this.jdbcClient = jdbcClient;
@@ -103,10 +107,12 @@ class ProductService {
     }
 
     Collection<Product> similarProductsTo(Product product) {
-        var similar = this.vectorStore.similaritySearch(product.description());
+        var similar = this.vectorStore.similaritySearch(SearchRequest.query(  product.name() + " "+ product.description()));
         return similar
                 .parallelStream()
+                .peek(doc -> log.debug((Float) doc.getMetadata().get("distance")))
                 .map(doc -> (Integer) doc.getMetadata().get("id"))
+                .filter( id -> !id.equals( product.id()))
                 .map(this::byId)
                 .toList();
     }
@@ -120,7 +126,6 @@ class ProductService {
     }
 
     Collection<Product> products() {
-
         return this.jdbcClient
                 .sql("SELECT * FROM products")
                 .query(this.productRowMapper)
