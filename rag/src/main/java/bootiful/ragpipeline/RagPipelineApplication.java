@@ -46,7 +46,7 @@ public class RagPipelineApplication {
 
 
             var log = LoggerFactory.getLogger(getClass());
-            //initializeVectorDatabase(productService, jdbcClient, vectorStore, tokenTextSplitter);
+//initializeVectorDatabase(productService, jdbcClient, vectorStore, tokenTextSplitter);
 
             var product = productService.byId(7011);
             log.info("searching for similar records to\n{}", product.id() + " " + product.name() + " " + product.description());
@@ -107,12 +107,12 @@ class ProductService {
     }
 
     Collection<Product> similarProductsTo(Product product) {
-        var similar = this.vectorStore.similaritySearch(SearchRequest.query(  product.name() + " "+ product.description()));
+        var similar = this.vectorStore.similaritySearch(SearchRequest.query(product.name() + " " + product.description()));
         return similar
                 .parallelStream()
                 .peek(doc -> log.debug((Float) doc.getMetadata().get("distance")))
                 .map(doc -> (Integer) doc.getMetadata().get("id"))
-                .filter( id -> !id.equals( product.id()))
+                .filter(id -> !id.equals(product.id()))
                 .map(this::byId)
                 .toList();
     }
