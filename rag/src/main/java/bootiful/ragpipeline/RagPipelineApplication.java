@@ -151,26 +151,27 @@ class ProductService {
     }
 
     Recommendation recommend(Product product, String query) throws Exception {
+        var productIdKey = "productId";
+        var explanationKey = "explanation";
 
         var systemPrompt = """
-                
                 You are a personal shopper assistant whose job it is to help a shopper answer 
                 questions and find the best product given the shopper's questions and the following choices:
                                 
                 {products}
                                 
-                the data is presented with three columns each, delimited by "|". The ID is the first column. Please return the ID of the product that would
-                be the single best response to their query. If you do not know, return an empty string. 
+                the data is presented with three columns each, delimited by "|". The ID is the first column. 
+                Please return the ID of the product that would be the single best response to their query. 
+                If you do not know, return an empty string. 
                        
                 Here is their question:
                                 
                 {question}                              
                                 
-                If you do know, please return the response in a JSON structure with two attributes: one, `productId`, containing the ID of the product you have chosen,
-                and `explanation`, containing the reasons you think this is the best choice for the shopper.  
-                                
-                         
-                """;
+                If you do know, please return the response in a JSON structure with two attributes: one, `%s`, 
+                containing the ID of the product you have chosen, and `%s`, containing the reasons you think this is 
+                the best choice for the shopper.  
+                """.formatted(productIdKey, explanationKey);
 
         var similar = similarProductsTo(product)
                 .stream()
@@ -182,11 +183,12 @@ class ProductService {
 
         var response = this.ai.call(prompt).getResult().getOutput().getContent();
         if (StringUtils.hasText(response)) {
-            var map = this.objectMapper
-                    .readValue(response, Map.class);
-            Assert.state(map.containsKey("productId"), "there must be an `productId` attribute");
-            Assert.state(map.containsKey("explanation"), "there must be an `explanations` attribute");
-            return new Recommendation(byId(Integer.parseInt((String) map.get("productId"))), (String) map.get("explanation"));
+            var map = this.objectMapper.readValue(response, Map.class);
+
+            for (var k : new String[]{productIdKey, explanationKey})
+                Assert.state(map.containsKey(k), "there must be a " + k + " attribute");
+
+            return new Recommendation(byId(Integer.parseInt((String) map.get(productIdKey))), (String) map.get(explanationKey));
         }
         return null;
     }
