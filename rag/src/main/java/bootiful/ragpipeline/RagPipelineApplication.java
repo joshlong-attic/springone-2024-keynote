@@ -150,7 +150,6 @@ class ProductService {
         this.ai = ai;
     }
 
-
     Recommendation recommend(Product product, String query) throws Exception {
 
         var systemPrompt = """
@@ -204,17 +203,11 @@ class ProductService {
     }
 
     Product byId(Integer id) {
-        try {
-            return this.jdbcClient
+        return this.jdbcClient
                 .sql("select * from products where id = ? ")
                 .param(id)
                 .query(this.productRowMapper)
-                    .single();
-        } //
-        catch (Throwable throwable) {
-            log.warn("could not find the ID " + id, throwable);
-        }
-        throw new RuntimeException("oops!") ;
+                .single();
     }
 
     Collection<Product> products() {
