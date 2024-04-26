@@ -1,10 +1,6 @@
 package bootiful.ragpipeline;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.ChatClient;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
@@ -13,60 +9,53 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
-import org.springframework.aot.hint.RuntimeHints;
-import org.springframework.aot.hint.RuntimeHintsRegistrar;
-import org.springframework.batch.core.Job;
-import org.springframework.batch.core.JobParametersBuilder;
-import org.springframework.batch.core.launch.JobLauncher;
-import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Description;
-import org.springframework.context.annotation.ImportRuntimeHints;
-import org.springframework.core.annotation.Order;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.data.annotation.Id;
-import org.springframework.jdbc.core.RowMapper;
+import org.springframework.data.repository.ListCrudRepository;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.stereotype.Service;
-import org.springframework.util.Assert;
+import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import javax.sql.DataSource;
-import java.util.Collection;
+import java.nio.charset.Charset;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static bootiful.ragpipeline.ProductsJsonLoaderJobConfiguration.JOB_NAME;
-
 @SpringBootApplication
-@EnableConfigurationProperties(RagPipelineConfigurationProperties.class)
-@ImportRuntimeHints(RagPipelineApplication.Hints.class)
 public class RagPipelineApplication {
-
-    static final Resource resource = new ClassPathResource("/products.json");
-
-    static class Hints implements RuntimeHintsRegistrar {
-
-        @Override
-        public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
-            hints.resources().registerResource(resource);
-        }
-    }
-
-    private final Logger log = LoggerFactory.getLogger(getClass());
 
     public static void main(String[] args) {
         SpringApplication.run(RagPipelineApplication.class, args);
+    }
+}
+
+@Configuration
+class Demo implements ApplicationRunner {
+
+    private final Resource prompt = new ClassPathResource("/prompt.txt");
+
+    private final ObjectMapper objectMapper;
+    private final ProductRepository repository;
+    private final VectorStore vectorStore;
+    private final ChatClient cc;
+    private final TokenTextSplitter tokenTextSplitter;
+
+    Demo(ObjectMapper objectMapper, ProductRepository repository, VectorStore vectorStore, ChatClient cc, TokenTextSplitter tokenTextSplitter) {
+        this.objectMapper = objectMapper;
+        this.repository = repository;
+        this.vectorStore = vectorStore;
+        this.cc = cc;
+        this.tokenTextSplitter = tokenTextSplitter;
     }
 
     @Bean
@@ -79,86 +68,49 @@ public class RagPipelineApplication {
         return new TokenTextSplitter();
     }
 
-    @Bean
-    @Order(10)
-    @ConditionalOnProperty ("bootiful.rag.ingest-products")
-    ApplicationRunner productsIngestBatchJobRunner(JobLauncher jobLauncher, @Qualifier(JOB_NAME) Job job) {
-        return args -> {
-            log.info("running the batch job");
-            jobLauncher.run(job, new JobParametersBuilder()
-                    .addJobParameter("id", UUID.randomUUID().toString(), String.class)
-                    .toJobParameters());
-        };
+    Recommendation recommend(Product product, String query) throws Exception {
+        var productIdKey = "productId";
+        var explanationKey = "explanation";
+        var systemPrompt = prompt
+                .getContentAsString(Charset.defaultCharset())
+                .formatted(productIdKey, explanationKey);
+
+        var similar = this.vectorStore
+                .similaritySearch(SearchRequest.query(product.name() + " " + product.description()))
+                .parallelStream()
+                .map(doc -> repository.findById((Integer) doc.getMetadata().get("id")).get())
+                .map(p -> p.id() + " | " + p.name() + " | " + p.description())
+                .collect(Collectors.joining(System.lineSeparator() + System.lineSeparator()));
+
+        var systemPromptTemplate = new PromptTemplate(systemPrompt);
+        var prompt = systemPromptTemplate.create(Map.of("products", similar, "question", query));
+
+        var response = cc.call(prompt).getResult().getOutput().getContent();
+        if (StringUtils.hasText(response)) {
+            var map = this.objectMapper.readValue(response, Map.class);
+            return new Recommendation(repository.findById(Integer.parseInt((String) map.get(productIdKey))).get(),
+                    (String) map.get(explanationKey));
+        }
+        return null;
     }
 
-    @Bean
-    @Order(20)
-    @ConditionalOnProperty ("bootiful.rag.create-vector-database-embeddings")
-    ApplicationRunner vectorDbInitializationRunner(ProductService productService, JdbcClient jdbcClient, VectorStore vectorStore,
-                                                   TokenTextSplitter tokenTextSplitter) {
-        return args -> {
-            log.info("initializing the vector DB");
-            jdbcClient.sql("delete from vector_store");
-            var products = productService.products();
-            products
-                    .parallelStream()
-                    .forEach(product -> {
-                        var doc = new Document(
-                                product.name() + " " + product.description(),
-                                Map.of("price", product.price(),
-                                        "description", product.description(),
-                                        "sku", product.sku(),
-                                        "name", product.name(),
-                                        "id", product.id()
-                                ));
-                        log.debug("adding [" +  (product) + "] to the vector db.");
-
-                        var vectorStoreReadyDocs = tokenTextSplitter.apply(List.of(doc));
-
-                        vectorStore.accept(vectorStoreReadyDocs);
-                    });
-        };
+    @Override
+    public void run(ApplicationArguments args) throws Exception {
+        for (var product : repository.findAll()) {
+            var doc = new Document(
+                    product.name() + " " + product.description(),
+                    Map.of("price", product.price(), "description", product.description(),
+                            "sku", product.sku(), "name", product.name(), "id", product.id()));
+            vectorStore.accept(tokenTextSplitter.apply(List.of(doc)));
+        }
+        var product = repository.findById(40).get();
+        var recommended = recommend(product, "i want something that will look flattering and comfortable in the spring time.");
+        var response = cc.call(new Prompt("what's the weather in the south pole?",
+                OpenAiChatOptions.builder().withFunction("weather").build()));
     }
 
-
-    @Bean
-    @Order(30)
-    @ConditionalOnProperty ("bootiful.rag.run-rag-demo")
-    ApplicationRunner ragDemoRunner(ProductService productService, ChatClient cc) {
-        return args -> {
-
-            log.info("running the RAG demo");
-
-            var product = productService.byId(40);
-            log.info("searching for similar records to\n{}",  (product));
-
-            // recommendations
-            var recommended = productService
-                    .recommend(product, "i want something that will look flattering and comfortable in the spring time.");
-            System.out.println(recommended.toString());
-
-
-
-        };
-    }
-
-    @Bean
-    @Order(40)
-    @ConditionalOnProperty("bootiful.rag.run-functions")
-    ApplicationRunner functionsRunner(ChatClient cc) {
-        return args -> {
-            var response = cc.call(new Prompt("what's the weather in the south pole?", OpenAiChatOptions.builder().withFunction("weather").build()));
-            System.out.println(response.getResult().getOutput().getContent());
-        };
-
-    }
-
-    @Bean
-    @Description("how hot does a tesla get?")
-    Function<MockWeatherService.Request, MockWeatherService.Response> weather() {
-        return new MockWeatherService();
-    }
-
+    @Component
+    @Description("gets the weather for a location")
     static class MockWeatherService implements Function<MockWeatherService.Request, MockWeatherService.Response> {
 
         enum Unit {C, F}
@@ -174,115 +126,13 @@ public class RagPipelineApplication {
             return new Response(42.0, Unit.C);
         }
     }
-
-
 }
 
 record Recommendation(Product product, String explanation) {
 }
 
-
-@Service
-class ProductService {
-
-    private final Log log = LogFactory.getLog(getClass());
-
-    private final JdbcClient jdbcClient;
-
-    private final VectorStore vectorStore;
-
-    private final ObjectMapper objectMapper;
-    private final ChatClient ai;
-
-    private final RowMapper<Product> productRowMapper = (rs, rowNum) -> new Product(
-            rs.getInt("id"), rs.getString("description"),
-            rs.getString("name"), rs.getString("sku"), rs.getFloat("price"));
-
-    ProductService(JdbcClient jdbcClient, VectorStore vectorStore, ObjectMapper objectMapper, ChatClient ai) {
-        this.jdbcClient = jdbcClient;
-        this.vectorStore = vectorStore;
-        this.objectMapper = objectMapper;
-        this.ai = ai;
-    }
-
-    Recommendation recommend(Product product, String query) throws Exception {
-        var productIdKey = "productId";
-        var explanationKey = "explanation";
-
-        var systemPrompt = """
-                You are a personal shopper assistant whose job it is to help a shopper answer 
-                questions and find the best product given the shopper's questions and the following choices:
-                                
-                {products}
-                                
-                the data is presented with three columns each, delimited by "|". The ID is the first column. 
-                Please return the ID of the product that would be the single best response to their query. 
-                If you do not know, return an empty string. 
-                       
-                Here is their question:
-                                
-                {question}                              
-                                
-                If you do know, please return the response in a JSON structure with two attributes: one, `%s`, 
-                containing the ID of the product you have chosen, and `%s`, containing the reasons you think this is 
-                the best choice for the shopper.  
-                """.formatted(productIdKey, explanationKey);
-
-        var similar = similarProductsTo(product)
-                .stream()
-                .map(p -> p.id() + " | " + p.name() + " | " + p.description())
-                .collect(Collectors.joining(System.lineSeparator() + System.lineSeparator()));
-
-        var systemPromptTemplate = new PromptTemplate(systemPrompt);
-        var prompt = systemPromptTemplate.create(Map.of("products", similar, "question", query));
-
-        var response = this.ai.call(prompt).getResult().getOutput().getContent();
-        if (StringUtils.hasText(response)) {
-            var map = this.objectMapper.readValue(response, Map.class);
-
-            for (var k : new String[]{productIdKey, explanationKey})
-                Assert.state(map.containsKey(k), "there must be a " + k + " attribute");
-
-            return new Recommendation(byId(Integer.parseInt((String) map.get(productIdKey))), (String) map.get(explanationKey));
-        }
-        return null;
-    }
-
-      Collection<Product> similarProductsTo(Product product) {
-        var similar = this.vectorStore.similaritySearch(SearchRequest.query(product.name() + " " + product.description()));
-        return similar
-                .parallelStream()
-                .peek(doc -> log.debug( "distance " +(Float) doc.getMetadata().get("distance") +" for ID " + doc.getMetadata().get("id")))
-                .map(doc -> (Integer) doc.getMetadata().get("id"))
-                .filter(id -> !id.equals(product.id()))
-                .map(this::byId)
-                .toList();
-    }
-
-    Product byId(Integer id) {
-        return this.jdbcClient
-                .sql("select * from products where id = ? ")
-                .param(id)
-                .query(this.productRowMapper)
-                .single();
-    }
-
-    Collection<Product> products() {
-        return this.jdbcClient
-                .sql("SELECT * FROM products")
-                .query(this.productRowMapper)
-                .list();
-    }
+interface ProductRepository extends ListCrudRepository<Product, Integer> {
 }
 
 record Product(@Id Integer id, String description, String name, String sku, float price) {
-    @Override
-    public String toString() {
-        return  id + " " + name;
-    }
-}
-
-@ConfigurationProperties(prefix = "bootiful.rag")
-record RagPipelineConfigurationProperties(
-        boolean ingestProducts, boolean createVectorDatabaseEmbeddings, boolean runFunctions, boolean runRagDemo) {
 }
