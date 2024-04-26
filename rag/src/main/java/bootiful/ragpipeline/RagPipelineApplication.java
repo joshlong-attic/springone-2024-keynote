@@ -13,6 +13,8 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.aot.hint.RuntimeHints;
+import org.springframework.aot.hint.RuntimeHintsRegistrar;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobLauncher;
@@ -25,7 +27,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Description;
+import org.springframework.context.annotation.ImportRuntimeHints;
 import org.springframework.core.annotation.Order;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
 import org.springframework.data.annotation.Id;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -43,10 +48,20 @@ import java.util.stream.Collectors;
 
 import static bootiful.ragpipeline.ProductsJsonLoaderJobConfiguration.JOB_NAME;
 
-@EnableConfigurationProperties(RagPipelineConfigurationProperties.class)
 @SpringBootApplication
+@EnableConfigurationProperties(RagPipelineConfigurationProperties.class)
+@ImportRuntimeHints(RagPipelineApplication.Hints.class)
 public class RagPipelineApplication {
 
+    static final Resource resource = new ClassPathResource("/products.json");
+
+    static class Hints implements RuntimeHintsRegistrar {
+
+        @Override
+        public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
+            hints.resources().registerResource(resource);
+        }
+    }
 
     private final Logger log = LoggerFactory.getLogger(getClass());
 
