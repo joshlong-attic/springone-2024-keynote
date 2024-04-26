@@ -189,9 +189,7 @@ class ProductService {
             Assert.state(map.containsKey("explanation"), "there must be an `explanations` attribute");
             return new Recommendation(byId(Integer.parseInt((String) map.get("productId"))), (String) map.get("explanation"));
         }
-
         return null;
-
     }
 
       Collection<Product> similarProductsTo(Product product) {
