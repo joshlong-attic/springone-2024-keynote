@@ -132,36 +132,31 @@ public class RagPipelineApplication {
     @ConditionalOnProperty("bootiful.rag.run-functions")
     ApplicationRunner functionsRunner(ChatClient cc) {
         return args -> {
-            var response = cc.call(new Prompt("what's the weather in Los Angeles, CA?",
-                    OpenAiChatOptions
-                            .builder()
-                            .withFunction("weather")
-                            .build()
-            ));
+            var response = cc.call(new Prompt("what's the weather in the south pole?", OpenAiChatOptions.builder().withFunction("weather").build()));
             System.out.println(response.getResult().getOutput().getContent());
-
         };
 
     }
 
     @Bean
-    @Description("Get the weather in location")
+    @Description("how hot does a tesla get?")
     Function<MockWeatherService.Request, MockWeatherService.Response> weather() {
         return new MockWeatherService();
     }
 
     static class MockWeatherService implements Function<MockWeatherService.Request, MockWeatherService.Response> {
 
-        public enum Unit {C, F}
+        enum Unit {C, F}
 
-        public record Request(String location, Unit unit) {
+        record Request(String location, Unit unit) {
         }
 
-        public record Response(double temp, Unit unit) {
+        record Response(double temp, Unit unit) {
         }
 
+        @Override
         public Response apply(Request request) {
-            return new Response(30.0, Unit.C);
+            return new Response(42.0, Unit.C);
         }
     }
 
