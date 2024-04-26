@@ -6,8 +6,10 @@ import org.apache.commons.logging.LogFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.ChatClient;
+import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.document.Document;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -22,6 +24,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Description;
 import org.springframework.core.annotation.Order;
 import org.springframework.data.annotation.Id;
 import org.springframework.jdbc.core.RowMapper;
@@ -35,6 +38,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static bootiful.ragpipeline.ProductsJsonLoaderJobConfiguration.JOB_NAME;
@@ -105,7 +109,7 @@ public class RagPipelineApplication {
     @Bean
     @Order(30)
     @ConditionalOnProperty ("bootiful.rag.run-rag-demo")
-    ApplicationRunner ragDemoRunner(ProductService productService) {
+    ApplicationRunner ragDemoRunner(ProductService productService, ChatClient cc) {
         return args -> {
 
             log.info("running the RAG demo");
@@ -113,13 +117,54 @@ public class RagPipelineApplication {
             var product = productService.byId(40);
             log.info("searching for similar records to\n{}",  (product));
 
+            // recommendations
             var recommended = productService
                     .recommend(product, "i want something that will look flattering and comfortable in the spring time.");
-
             System.out.println(recommended.toString());
+
+
 
         };
     }
+
+    @Bean
+    @Order(40)
+    @ConditionalOnProperty("bootiful.rag.run-functions")
+    ApplicationRunner functionsRunner(ChatClient cc) {
+        return args -> {
+            var response = cc.call(new Prompt("what's the weather in Los Angeles, CA?",
+                    OpenAiChatOptions
+                            .builder()
+                            .withFunction("weather")
+                            .build()
+            ));
+            System.out.println(response.getResult().getOutput().getContent());
+
+        };
+
+    }
+
+    @Bean
+    @Description("Get the weather in location")
+    Function<MockWeatherService.Request, MockWeatherService.Response> weather() {
+        return new MockWeatherService();
+    }
+
+    static class MockWeatherService implements Function<MockWeatherService.Request, MockWeatherService.Response> {
+
+        public enum Unit {C, F}
+
+        public record Request(String location, Unit unit) {
+        }
+
+        public record Response(double temp, Unit unit) {
+        }
+
+        public Response apply(Request request) {
+            return new Response(30.0, Unit.C);
+        }
+    }
+
 
 }
 
@@ -229,5 +274,5 @@ record Product(@Id Integer id, String description, String name, String sku, floa
 
 @ConfigurationProperties(prefix = "bootiful.rag")
 record RagPipelineConfigurationProperties(
-        boolean ingestProducts, boolean createVectorDatabaseEmbeddings, boolean runRagDemo) {
+        boolean ingestProducts, boolean createVectorDatabaseEmbeddings, boolean runFunctions, boolean runRagDemo) {
 }
