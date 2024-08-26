@@ -37,11 +37,14 @@ class DogController {
     void adopt(@PathVariable Integer dogId,
                @RequestBody Map<String, String> owner) {
         this.repository.findById(dogId).ifPresent(dog -> {
+            // Set the new owner's name
             var nDog = new Dog(dog.id(), dog.gender(), dog.name(), owner.get("name"), dog.dob(), dog.description() ,
                     dog.image());
             var saved = this.repository.save(nDog);
             System.out.println("adopted [" + saved + "]");
-            this.publisher.publishEvent(new DogAdoptedEvent (dog.id()));
+
+            // Tell any module in the application!
+            this.publisher.publishEvent(new DogAdopted(dog.id()));
         });
     }
 }

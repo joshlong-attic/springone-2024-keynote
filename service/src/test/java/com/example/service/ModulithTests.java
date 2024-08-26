@@ -1,6 +1,5 @@
-package com.example.service.dogs;
+package com.example.service;
 
-import com.example.service.ServiceApplication;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.modulith.core.ApplicationModules;
@@ -17,9 +16,8 @@ class ModulithTests {
         for (var m : am)
             System.out.println("module [" + m + "]");
 
-        new Documenter(am)
-                .writeModulesAsPlantUml()
-                .writeIndividualModulesAsPlantUml();
+        // Creates all-docs.adoc starting with Spring Modulith 1.2.2
+        new Documenter(am).writeDocumentation();
     }
 
 }
