@@ -1,0 +1,47 @@
+<template class="common-panel-template">
+    <style>
+
+        .common-panel {
+            box-shadow: calc(var(--gutter-width) / 2) calc(var(--gutter-width) / 2) calc(var(--gutter-width)) rgba(0, 0, 0, 0.2);
+            border-radius: var(--gutter-width);
+            border-width: var(--gutter-width);
+            border-style: solid;
+            position: relative;
+        }
+
+        .icon {
+            position: absolute;
+            z-index: 1000;
+            width: 30px;
+            overflow: clip;
+            height: 30px;
+        }
+
+
+        .common-panel-button {
+            border: 1px solid orange;
+            border-radius: var(--gutter-width);
+            padding-left: var(--gutter-width);
+            padding-bottom: calc(var(--gutter-width) / 2);
+            padding-top: calc(var(--gutter-width) / 2);
+            padding-right: var(--gutter-width);
+            font-size: larger;
+            font-weight: bold;
+            color: var(--color-white);
+            text-align: center;
+
+            width: min-content;
+        }
+
+        .common-panel-button:hover {
+            color: white;
+            cursor: pointer;
+        }
+    </style>
+
+
+    <div class="common-panel" part="common-panel">
+        <slot></slot>
+    </div>
+
+</template>

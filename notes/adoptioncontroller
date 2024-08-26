@@ -1,0 +1,42 @@
+package com.example.service.adoptions;
+
+import org.springframework.data.annotation.Id;
+import org.springframework.data.repository.ListCrudRepository;
+import org.springframework.stereotype.Controller;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
+import java.util.Map;
+
+@Transactional
+@Controller
+@ResponseBody
+@RequestMapping("/dogs")
+class AdoptionController {
+
+    private final DogRepository repository;
+
+    AdoptionController(DogRepository repository ) {
+        this.repository = repository;
+    }
+
+    @PostMapping("/{dogId}/adoptions")
+    void adopt(@PathVariable Integer dogId, @RequestBody Map<String, String> owners) {
+        this.repository.findById(dogId).ifPresent(dog -> {
+            var newDog = new Dog(dog.id(), dog.name(), dog.description(), owners.get("name"), dog.dob(),
+                    dog.image(), dog.gender());
+            var saved = this.repository.save(newDog);
+        });
+    }
+}
+
+
+interface DogRepository extends ListCrudRepository<Dog, Integer> {
+}
+
+record Dog(@Id Integer id, String name,
+           String description, String owner,
+           LocalDate dob, String image, char gender) {
+}
+

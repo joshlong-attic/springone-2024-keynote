@@ -1,0 +1,43 @@
+<html>
+<head>
+    <style>
+
+        .container {
+            --masked-image-dimension: 100px;
+            width: var(--masked-image-dimension);
+            height: var(--masked-image-dimension);
+            border: 1px solid red ;
+        }
+
+        .image {
+            width: 100%;
+            height: 100%;
+            /*background-size: cover;*/
+
+            mask-image: radial-gradient(circle, rgba(0, 0, 0, 1) 50%, rgba(0, 0, 0, 0) 70%);
+            mask-size: calc(2 * var(--masked-image-dimension)) calc(2 * var(--masked-image-dimension));
+            mask-repeat: no-repeat;
+        }
+
+        .image-left {
+            background: url('assets/left.png') no-repeat center center;
+            mask-position: 0px calc(-1 * var(--masked-image-dimension));
+        }
+
+        .image-right {
+            background: url('assets/right.png') no-repeat center center;
+            mask-position: calc(-1 * var(--masked-image-dimension)) calc(-1 * var(--masked-image-dimension));
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="image image-right"></div>
+</div>
+<div class="container">
+    <div class="image image-left"></div>
+</div>
+</body>
+</html>

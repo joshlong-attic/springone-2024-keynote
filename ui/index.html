@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>
+        Welcome to Pooch Palace!
+    </title>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat+Alternates:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
+
+        * {
+            margin: 0;
+            border: 0;
+            padding: 0;
+        }
+
+        /*
+          Typographic tweaks!
+          3. Add accessible line-height
+          4. Improve text rendering
+        */
+        body {
+            -webkit-font-smoothing: antialiased;
+            font-family: "Montserrat Alternates", sans-serif;
+        }
+
+        :root {
+            --gutter-width: 15px;
+            --color-blue: #70bbcb;
+            --color-pink: #fb7287;
+            --color-white: #f1e6d6;
+            --color-orange: #f79252;
+            --dog-panel-dimension: 250px;
+            --drop-shadow: calc(var(--gutter-width) / 2) calc(var(--gutter-width) / 2) calc(var(--gutter-width)) rgba(0, 0, 0, 0.2);
+            --mast-height: 300px;
+            --footer-height: 100px;
+            --section-width: calc(3 * var(--dog-panel-dimension));
+            --margin-dimension: 100px;
+            --logo-height: 250px;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: var(--color-blue);
+        }
+
+        .container {
+            position: absolute;
+            top: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        .container-panel-box {
+            position: fixed;
+            z-index: 10;
+            left: var(--margin-dimension);
+            right: var(--margin-dimension);
+        }
+
+        .container-panel {
+            position: relative;
+            height: 100vh;
+            opacity: 0.5;
+            background-color: white;
+        }
+
+        .container-content {
+            flex: 1;
+            display: grid;
+            grid-template-areas: 'container-content-left container-content-middle container-content-right';
+            grid-template-columns: var(--margin-dimension) auto var(--margin-dimension);
+            background-color: var(--color-orange);
+            box-shadow: var(--drop-shadow);
+            width: 100vw;
+            box-sizing: border-box;
+        }
+
+        .container-content-left {
+            z-index: 100;
+            grid-area: container-content-left;
+        }
+
+        .container-content-right {
+            z-index: 100;
+            grid-area: container-content-right;
+        }
+
+        .container-content-right img {
+            width: 100px;
+        }
+
+        .container-content-left img {
+            width: 100px;
+        }
+
+
+        .container-content-middle {
+            z-index: 100;
+            grid-area: container-content-middle;
+        }
+
+        .container-content-middle .container-content-middle-panel {
+            padding: var(--gutter-width);
+        }
+
+        .container-content-middle .container-content-middle-top {
+            display: flex;
+            justify-content: center;
+        }
+
+        .container-content-middle .container-content-middle-top img {
+            height: var(--logo-height);
+            padding-top: var(--gutter-width);
+        }
+
+        /* dogs */
+        .dogs {
+            display: grid;
+            gap: var(--gutter-width);
+            grid-template-columns: repeat(auto-fit, minmax(var(--dog-panel-dimension), 1fr));
+        }
+
+        .dog-result {
+            padding: var(--gutter-width);
+            text-align: center;
+            justify-self: center;
+        }
+
+        /* footer */
+        .footer {
+            padding-top: calc(1 * var(--gutter-width));
+            z-index: 100;
+        }
+
+        .footer-content {
+
+            grid-area: footer;
+            align-self: end;
+            display: grid;
+            grid-template-areas: 'footer-content-left footer-content-middle footer-content-right';
+            grid-template-columns: var(--margin-dimension) auto var(--margin-dimension);
+            width: 100vw;
+            box-sizing: border-box;
+            margin-top: var(--gutter-width);
+        }
+
+        .footer-content .text {
+            font-size: 9pt;
+        }
+
+        /* footer */
+
+        .assistant::part(common-panel) {
+            border-color: var(--color-orange);
+            padding: var(--gutter-width);
+            margin: calc(0.9 * var(--margin-dimension));
+            margin-top: 0;
+            margin-bottom: var(--gutter-width);
+        }
+
+        .assistant .assistant-panel {
+            --assistant-image-width: 150px;
+            display: grid;
+            grid-template-areas:
+                ' assistant-panel-image assistant-panel-prompt    assistant-panel-prompt '
+                ' assistant-panel-image assistant-panel-query     assistant-panel-query '
+                ' assistant-panel-image assistant-panel-fetch     assistant-panel-fetch '
+                ' assistant-panel-image assistant-panel-response  assistant-panel-response ';
+
+            grid-template-columns: var( --assistant-image-width ) auto 100px;
+        }
+
+        .assistant-panel .assistant-panel-response {
+            grid-area: assistant-panel-response;
+            margin-top: var(--gutter-width);
+            display: none;
+            margin-bottom: var(--gutter-width);
+
+        }
+
+        .assistant-panel .assistant-panel-image img {
+            width: var(--assistant-image-width);
+        }
+
+        .assistant-panel .assistant-panel-image {
+            grid-area: assistant-panel-image;
+            width: var(--assistant-image-width);
+        }
+
+        .assistant-panel .assistant-panel-prompt {
+            grid-area: assistant-panel-prompt;
+        }
+
+        .assistant-panel .assistant-panel-query {
+            grid-area: assistant-panel-query;
+            margin-top: var(--gutter-width);
+            border-radius: var(--gutter-width);
+            border: 10px solid var(--color-white);
+            height: calc(var(--gutter-width) * 5);
+            padding: var(--gutter-width);
+        }
+
+        .assistant-panel .assistant-panel-fetch button {
+            text-align: center;
+            justify-self: center;
+        }
+
+        .assistant-panel .assistant-panel-fetch {
+            grid-area: assistant-panel-fetch;
+        }
+
+        .assistant-panel .assistant-panel-fetch .go-fetch {
+            background-color: var(--color-orange);
+        }
+
+
+        button {
+            border-width: 0;
+            padding: var(--gutter-width);
+            margin-top: var(--gutter-width);
+            border-radius: var(--gutter-width);
+            font-size: medium;
+            font-weight: bold;
+            color: white;
+        }
+
+        button:hover {
+            filter: brightness(1.1);
+        }
+
+        /* the two dogs on the left and the right */
+        .container {
+            --masked-image-dimension: 100px;
+            width: var(--masked-image-dimension);
+            height: var(--masked-image-dimension);
+        }
+
+        .image {
+            position: fixed;
+            height: var(--margin-dimension);
+            width: var(--margin-dimension);
+            mask-image: radial-gradient(circle, rgba(0, 0, 0, 1) 50%, rgba(0, 0, 0, 0) 70%);
+            mask-size: calc(2 * var(--masked-image-dimension)) calc(2 * var(--masked-image-dimension));
+            mask-repeat: no-repeat;
+        }
+
+        .image-left {
+            background: url('assets/left.png') no-repeat center center;
+            /*margin-left: calc(-1 * var(--gutter-width));*/
+            mask-position: 0 calc(-1 * var(--masked-image-dimension));
+        }
+
+        .image-right {
+            background: url('assets/right.png') no-repeat center center;
+            mask-position: calc(-1 * var(--masked-image-dimension)) calc(-1 * var(--masked-image-dimension));
+        }
+
+        /* the two dogs on the left and the right */
+
+        /*
+        FOOTER
+        */
+
+        .footer-content-middle {
+            display: grid;
+            grid-template-areas: ' left middle right ';
+            grid-template-columns: auto 500px  auto;
+        }
+
+        .footer-content-middle .footer-left {
+            grid-area: left;
+            text-align: right;
+            padding-right: var(--gutter-width);
+            padding-left: var(--gutter-width);
+        }
+
+        .footer-content-middle .footer-right {
+            grid-area: right;
+            padding-right: var(--gutter-width);
+            padding-left: var(--gutter-width);
+        }
+
+        .footer-content-middle .footer-image {
+            grid-area: middle;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .footer-content-middle .footer-image img {
+            height: 100px
+        }
+    </style>
+    <script src="common.js"></script>
+    <script src="common-panel.js"></script>
+    <script src="dog-panel.js"></script>
+    <script src="api.js"></script>
+    <script>
+        addEventListener('dog-panel:adoption-initiated', async (evt) => {
+            const dogId = evt.detail.dogId
+            await api.dogs.adopt({id: dogId})
+            await refreshDogsView()
+            evt.preventDefault()
+            return false
+        })
+
+        async function refreshDogsView() {
+            const dogs = await (window.api.dogs.read())
+            const dogsElement = document.querySelector('.dogs')
+            dogsElement.innerHTML = ''
+
+            function sort(arr) {
+                arr.sort((a, b) => a.id > b.id)
+                return arr
+            }
+
+            const dogsSorted = sort(dogs);
+            dogsSorted.forEach(dog => {
+                const dogPanelId = 'dog-panel-' + dog.id
+                const divElement = document.createElement('div')
+                divElement.classList.add('dog-result')
+                const dogPanelElement = document.createElement('dog-panel')
+                dogPanelElement.setAttribute('gender', dog.gender)
+                dogPanelElement.setAttribute('name', dog.name)
+                dogPanelElement.setAttribute('image-url', dog.image)
+                dogPanelElement.setAttribute('dog-id', dog.id)
+                dogPanelElement.setAttribute('dob', dog.dob)
+                dogPanelElement.setAttribute('owner', dog.owner)
+                dogPanelElement.setAttribute('id', dogPanelId)
+                dogPanelElement.innerText = dog.description
+                divElement.append(dogPanelElement)
+                dogsElement.append(divElement)
+            })
+        }
+
+        async function refreshUserSessionView() {
+            Array.from(document.querySelectorAll('.username'))
+                .forEach(async usernameNode => usernameNode.innerText = (await api.session.me()))
+        }
+
+        addEventListener('load', async (evt) => {
+            document.querySelector('.go-fetch').addEventListener('click', async e => {
+                const value = document.querySelector('.assistant-panel-query').value;
+                const suggestion = await api.dogs.help(value)
+                const message = 'Good news! We have a dog named <strong>' + suggestion.name + '</strong> who is described as ' + suggestion.description + '. You can pick ' +
+                    suggestion.name + ' up at ' + suggestion.pickup
+                const element = document.querySelector('.assistant-panel-response');
+                element.innerHTML = message
+                element.style.display = 'block'
+            });
+
+            await refreshDogsView()
+            await refreshUserSessionView()
+        })
+    </script>
+</head>
+<body>
+<div class="container-panel-box">
+    <div class="container-panel"></div>
+</div>
+<div class="container">
+    <div class="container-content">
+        <div class="container-content-left ">
+            <div class="container">
+                <div class="image image-left"></div>
+            </div>
+        </div>
+        <div class="container-content-right ">
+            <div class="container">
+                <div class="image image-right"></div>
+            </div>
+        </div>
+        <div class="container-content-middle">
+            <div class="container-content-middle-top">
+                <img src="assets/pooch-palace-updated.png" alt="Pooch Palace: a Dog Adoption Agency"/>
+            </div>
+            <div class="container-content-middle-panel">
+                <common-panel class="assistant">
+                    <div class="assistant-panel">
+                        <div class="assistant-panel-image">
+                            <img alt="logo for Pooch Palace AI Assistant"
+                                 src="assets/adoption-assistant-icon.png"/>
+                        </div>
+                        <div class="assistant-panel-prompt">
+                            <EM>Woof!</EM> Hello, <strong class="username"></strong>! Tell me what you’re
+                            looking for, and we’ll see if we can match you up with your next <em>four
+                            legged friend</em>.
+                        </div>
+                        <textarea class="assistant-panel-query">do you have any neurotic dogs, and if so when might I pick them up?</textarea>
+                        <div class="assistant-panel-fetch">
+                            <button class="go-fetch" type="button">go fetch!</button>
+                        </div>
+                        <div class="assistant-panel-response"></div>
+                    </div>
+                </common-panel>
+                <div class="dogs">
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="footer">
+        <div class="footer-content">
+            <div class="footer-content-left"></div>
+            <div class="footer-content-middle">
+
+                <div class="footer-left">
+                    Made with love by the <strong>Spring</strong> team.
+                    Find the <a href="">code</a> here
+                </div>
+                <div class="footer-image"><img src="assets/hero-dog-1.png"/></div>
+                <div class="footer-right"> Want a furry friend for life? <a
+                        href="https://googlethatforyou.com?q=local%20animal%20shelters%20near%20me">
+                    Check your local animal shelter.</a></div>
+            </div>
+            <div class="footer-content-right"></div>
+
+        </div>
+    </div>
+</div>
+</body>
+</html>
