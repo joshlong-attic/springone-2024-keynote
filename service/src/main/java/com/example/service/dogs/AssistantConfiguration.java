@@ -68,7 +68,7 @@ class DogAdoptionService {
     }
 
     // visible for testing
-    ChatClient.ChatClientRequest.CallResponseSpec doSuggest(String query) {
+    ChatClient.CallResponseSpec doSuggest(String query) {
         return chatClient
                 .prompt()
                 .user(query)
